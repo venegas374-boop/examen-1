@@ -20,6 +20,46 @@ import { obtenerToken, olvidarSesion } from "./auth.js";
  * Ningún otro archivo debe llamar a fetch directamente (salvo auth.js, ya hecho).
  */
 export const request = async (ruta, opciones = {}) => {
-  // TODO
-  throw new Error("TODO [F1]: request() no implementado");
+  const { body, headers = {}, ...resto } = opciones;
+
+  // 2 y 3
+  const encabezados = { Accept: "application/json", ...headers };
+  const token = obtenerToken();
+  if (token) encabezados.Authorization = `Bearer ${token}`;
+
+  // 4
+  const esObjeto = body !== null && typeof body === "object";
+  if (esObjeto) encabezados["Content-Type"] = "application/json";
+
+  // 5
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_MS);
+
+  try {
+    const response = await fetch(`${BASE_URL}${ruta}`, {
+      ...resto,
+      headers: encabezados,
+      body: esObjeto ? JSON.stringify(body) : body,
+      signal: controlador.signal,
+    });
+
+    // 6
+    if (response.status === 204) return null;
+
+    const datos = await response.json().catch(() => ({}));
+
+    // 7
+    if (!response.ok) {
+      if (response.status === 401) {
+        olvidarSesion();
+        window.location.reload();
+      }
+      throw new ErrorApi(response.status, datos);
+    }
+
+    // 8
+    return datos;
+  } finally {
+    clearTimeout(temporizador);
+  }
 };
